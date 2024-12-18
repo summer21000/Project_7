@@ -1,2 +1,3 @@
 /api_key.txt
 fine_tuned_bert/model.safetensors
+fine_tuned_bert_ai26/model.safetensors
