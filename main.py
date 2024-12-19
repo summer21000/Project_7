@@ -1,11 +1,11 @@
 from typing import Union
-
 from fastapi import FastAPI
 from pydantic import BaseModel
-
 import os
 import openai
 from openai import OpenAI
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 
 def load_keys(path):
@@ -32,18 +32,39 @@ def text2summary(input_text):
 
     return response.choices[0].message.content
 
+def predict(text, model, tokenizer, device):
+    # 입력 문장 토크나이징
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+    inputs = {key: value.to(device) for key, value in inputs.items()}  # 각 텐서를 GPU로 이동
+
+    # 모델 예측
+    model.eval()
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    # 로짓을 소프트맥스로 변환하여 확률 계산
+    logits = outputs.logits
+    probabilities = logits.softmax(dim=1)
+
+    # 가장 높은 확률을 가진 클래스 선택
+    pred = torch.argmax(probabilities, dim=-1).item()
+
+    return pred, probabilities
+
 
 app = FastAPI()
 
+
 path = './'
+
 
 openai.api_key = load_keys(path + 'api_key.txt')
 os.environ['OPENAI_API_KEY'] = openai.api_key
 
-class Item(BaseModel):
-    name: str
-    price: float
-    is_offer: Union[bool, None] = None
+save_directory = path + "fine_tuned_bert_ai26"
+model = AutoModelForSequenceClassification.from_pretrained(save_directory)
+tokenizer = AutoTokenizer.from_pretrained(save_directory)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 @app.get("/")
@@ -56,8 +77,6 @@ def hospital_by_module(request : str, latitude : float, longitude : float):
     
     summary = text2summary(request)
     
-    return {"요약" : summary, "latitude" : latitude, "longitude" : longitude}
-
-@app.get("/list_of_hospital")
-def list_of_hospital():
-    return {"병원1":"병원1"}, {"병원2":"병원2"}, {"병원3":"병원3"}
+    pred, probabilities = predict(summary, model, tokenizer, device)
+    
+    return {"요약" : summary, "latitude" : latitude, "longitude" : longitude, "예측등급" : pred+1, "확률" : probabilities}
