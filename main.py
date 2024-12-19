@@ -7,7 +7,8 @@ from openai import OpenAI
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import json
-
+import pandas as pd
+import requests
 
 def load_keys(path):
   with open(path, 'r') as file:
@@ -53,6 +54,46 @@ def predict(text, model, tokenizer, device):
     return pred, probabilities
 
 
+def get_dist(start_lat, start_lng, dest_lat, dest_lng, c_id, c_key):
+    url = "https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving"
+    headers = {
+        "X-NCP-APIGW-API-KEY-ID": c_id,
+        "X-NCP-APIGW-API-KEY": c_key,
+    }
+    params = {
+        "start": f"{start_lng},{start_lat}",  # 출발지 (경도, 위도)
+        "goal": f"{dest_lng},{dest_lat}",    # 목적지 (경도, 위도)
+        "option": "trafast"  # 실시간 빠른 길 옵션
+    }
+
+    # 요청하고, 답변 받아오기
+    response = requests.get(url, params, headers=headers)
+    response = response.json()
+
+    if response['code'] == 1:
+        dist = 0
+    elif response['code'] == 0:
+        # 'route' 키가 있는지 확인 후 접근
+        if 'route' in response and 'trafast' in response['route']:
+            dist = response['route']['trafast'][0]['summary']['distance']  # m(미터)
+        else:
+            print("No route found in the response.")
+            dist = None  # 또는 기본값을 반환할 수 있음
+    else:
+        print(f"Unexpected response code: {response['code']}")
+        dist = None
+
+    return dist
+
+
+def recommend_hospital(data, lat, lng, range, c_id, c_key) :
+  # 특정 범위 데이터만 추출
+  filtered_data = data[data['위도'].between(lat - range, lat + range) & data['경도'].between(lng - range, lng + range)].copy()
+
+  filtered_data['거리'] = filtered_data.apply(lambda x: get_dist(lat, lng, x['위도'], x['경도'], c_id, c_key), axis=1)
+  return filtered_data.sort_values(by='거리').head(3).reset_index(drop=True)
+
+
 app = FastAPI()
 
 
@@ -71,6 +112,10 @@ map_key = load_keys(path + 'map_key.txt')
 map_key = json.loads(map_key)
 c_id, c_key = map_key['c_id'], map_key['c_key']
 
+emergency = pd.read_csv(path + '응급실 정보.csv')
+
+
+#-------------------------------------------------fastapi 코드------------------------------------------------------------------
 
 @app.get("/")
 def read_root():
@@ -82,6 +127,10 @@ def hospital_by_module(request : str, latitude : float, longitude : float):
     
     summary = text2summary(request)
     
-    pred, probabilities = predict(summary, model, tokenizer, device)
+    predicted_class, _ = predict(summary, model, tokenizer,device)
     
-    return {"요약" : summary, "latitude" : latitude, "longitude" : longitude, "예측등급" : pred+1, "확률" : probabilities}
+    if predicted_class <= 2 :
+        result = recommend_hospital(emergency, latitude, longitude, 0.1, c_id, c_key)
+        return result.to_dict(orient="records")
+    else :
+        return {"권유 사항" : "개인 건강관리"} 
