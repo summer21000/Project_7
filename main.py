@@ -10,6 +10,7 @@ import json
 import pandas as pd
 import requests
 
+
 def load_keys(path):
   with open(path, 'r') as file:
     return file.readline().strip()
