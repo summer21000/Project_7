@@ -6,17 +6,38 @@ from pydantic import BaseModel
 import os
 import openai
 from openai import OpenAI
-import sys
 
-import json
 
-import emergency_ai26 as em
+def load_keys(path):
+  with open(path, 'r') as file:
+    return file.readline().strip()
+
+def text2summary(input_text):
+    client = OpenAI()
+    system_role = '당신은 입력된 텍스트를 가장 간결하고 핵심적인 표현으로 요약하는 어시스턴트입니다. 불필요한 설명을 생략하고 핵심적인 정보를 짧은 문장으로 요약하세요.'
+
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "system",
+                "content": system_role
+            },
+            {
+                "role": "user",
+                "content": f'"{input_text}" 어떤 상황인지 알 수 있게 문장자체를 요약해줘'
+            }
+        ]
+    )
+
+    return response.choices[0].message.content
+
 
 app = FastAPI()
 
 path = './'
 
-openai.api_key = em.load_keys(path + 'api_key.txt')
+openai.api_key = load_keys(path + 'api_key.txt')
 os.environ['OPENAI_API_KEY'] = openai.api_key
 
 class Item(BaseModel):
@@ -33,7 +54,7 @@ def read_root():
 @app.get("/hospital_by_module")
 def hospital_by_module(request : str, latitude : float, longitude : float):
     
-    summary = em.text2summary(request)
+    summary = text2summary(request)
     
     return {"요약" : summary, "latitude" : latitude, "longitude" : longitude}
 
