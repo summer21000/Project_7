@@ -10,13 +10,13 @@ import sys
 
 import json
 
-import emergency as em
+import emergency_ai26 as em
 
 app = FastAPI()
 
 path = './'
 
-openai.api_key = em.load_file(path + 'api_key.txt')
+openai.api_key = em.load_keys(path + 'api_key.txt')
 os.environ['OPENAI_API_KEY'] = openai.api_key
 
 class Item(BaseModel):
@@ -33,6 +33,6 @@ def read_root():
 @app.get("/hospital_by_module")
 def hospital_by_module(request : str, latitude : float, longitude : float):
     
-    summary = em.text_summary(request)
+    summary = em.text2summary(request)
     
     return {"요약" : summary, "latitude" : latitude, "longitude" : longitude}
