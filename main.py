@@ -36,3 +36,7 @@ def hospital_by_module(request : str, latitude : float, longitude : float):
     summary = em.text2summary(request)
     
     return {"요약" : summary, "latitude" : latitude, "longitude" : longitude}
+
+@app.get("/list_of_hospital")
+def list_of_hospital():
+    return {"병원1":"병원1"}, {"병원2":"병원2"}, {"병원3":"병원3"}
