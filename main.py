@@ -6,6 +6,7 @@ import openai
 from openai import OpenAI
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import json
 
 
 def load_keys(path):
@@ -65,6 +66,10 @@ save_directory = path + "fine_tuned_bert_ai26"
 model = AutoModelForSequenceClassification.from_pretrained(save_directory)
 tokenizer = AutoTokenizer.from_pretrained(save_directory)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+map_key = load_keys(path + 'map_key.txt')
+map_key = json.loads(map_key)
+c_id, c_key = map_key['c_id'], map_key['c_key']
 
 
 @app.get("/")
